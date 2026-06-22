@@ -1,0 +1,122 @@
+services:
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-init
+    user: "${AIRFLOW_UID:-50000}:0"
+    environment:
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    depends_on:
+      - postgres
+    entrypoint: /bin/bash -c "
+      airflow db init &&
+      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
+
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-webserver
+    user: "${AIRFLOW_UID:-50000}:0"
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__BASE_URL=http://localhost:8085
+      - AIRFLOW__CORE__DAGS_FOLDER=/usr/local/airflow/dags
+      # - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/usr/local/airflow/logs
+      - AIRFLOW__LOGGING__LOGGING_LEVEL=DEBUG
+      - AIRFLOW__WEBSERVER__SECRET_KEY=supersecretkey
+      # ── MSSQL connection details exposed as Airflow Variables ──────────────
+      # Use Variable.get("mssql_host") etc. in your DAGs and package code.
+      # From inside Docker the host is "mssql"; candidates connecting from their
+      # local machine should use "localhost" with port 1433.
+      - AIRFLOW_VAR_MSSQL_HOST=mssql
+      - AIRFLOW_VAR_MSSQL_PORT=1433
+      - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
+      - AIRFLOW_VAR_MSSQL_USER=candidate
+      - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./packages:/usr/local/airflow/packages
+    ports:
+      - "8085:8080"
+    depends_on:
+      - postgres
+      - airflow-init
+    # do not install deps here! we did that in the Dockerfile
+    entrypoint: /bin/bash -c "
+      pip install --no-deps -e /usr/local/airflow/packages/template_package &&
+      airflow webserver"
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-scheduler
+    user: "${AIRFLOW_UID:-50000}:0"
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__CORE__DAGS_FOLDER=/usr/local/airflow/dags
+      # - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/usr/local/airflow/logs
+      - AIRFLOW__WEBSERVER__SECRET_KEY=supersecretkey
+      # ── MSSQL connection details exposed as Airflow Variables ──────────────
+      - AIRFLOW_VAR_MSSQL_HOST=mssql
+      - AIRFLOW_VAR_MSSQL_PORT=1433
+      - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
+      - AIRFLOW_VAR_MSSQL_USER=candidate
+      - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./packages:/usr/local/airflow/packages
+    depends_on:
+      - postgres
+      - airflow-init
+    # do not install deps here! we did that in the Dockerfile
+    entrypoint: /bin/bash -c "
+      pip install --no-deps -e /usr/local/airflow/packages/template_package &&
+      airflow scheduler"
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ── Target database ────────────────────────────────────────────────────────
+  # Treated as a remote MSSQL server.  Candidates connect to it, create a
+  # schema, and write data into it.
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql_server
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "SA_Password123!"   # internal only
+      MSSQL_PID: "Express"
+    ports:
+      - "1433:1433"   # exposed so candidates can also connect from their host
+    volumes:
+      - ./db:/docker-init:ro
+      - mssql_data:/var/opt/mssql
+    entrypoint: /bin/bash /docker-init/entrypoint.sh
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "SA_Password123!" -Q "SELECT 1" -b -C
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  mssql_data:

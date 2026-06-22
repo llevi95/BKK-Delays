@@ -1,0 +1,83 @@
+certifi==2024.8.30
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   requests
+charset-normalizer==3.4.0
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   requests
+dotenv==0.9.9
+    # via template-package (pyproject.toml)
+et-xmlfile==2.0.0
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   openpyxl
+greenlet==3.1.1
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   sqlalchemy
+gtfs-realtime-bindings==2.0.0
+    # via template-package (pyproject.toml)
+idna==3.10
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   requests
+numpy==1.26.4
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+    #   pandas
+openpyxl==3.1.5
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+pandas==2.1.4
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+protobuf==4.25.5
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   gtfs-realtime-bindings
+psycopg2-binary==2.9.10
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+pymssql==2.3.2
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+python-dateutil==2.9.0.post0
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   pandas
+python-dotenv==1.0.1
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   dotenv
+python-json-logger==4.1.0
+    # via template-package (pyproject.toml)
+pytz==2024.2
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   pandas
+requests==2.32.3
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+six==1.17.0
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   python-dateutil
+sqlalchemy==1.4.54
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   template-package (pyproject.toml)
+tzdata==2024.2
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   pandas
+urllib3==2.2.3
+    # via
+    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
+    #   requests
