@@ -14,12 +14,12 @@ def categorize_delay(seconds):
     if seconds <= MINOR_MAX: return "minor_delay" # 123-300s
     return "major_delay" # > 300s
 
-def aggregete_daily_trip(df):
+def aggregate_daily_trip(df):
     """One row per (service_date, trip_id): max/avg/p95 delay + sample count."""
     d = df.assign(delay = primary_delay(df)).dropna(subset = ["delay"])
     g = d.groupby(["service_date", "trip_id", "route_id"])["delay"]
     out = g.agg(max_delay = "max", avg_delay = "mean",
-                p95 = lambda s: s.quantile(0.95), samples="count").reset_index()
+                p95 = lambda s: s.quantile(0.95), samples = "count").reset_index()
     out["delay_category"] = out["max_delay"].apply(categorize_delay)
     return out
 
