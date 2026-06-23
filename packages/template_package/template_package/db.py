@@ -14,3 +14,9 @@ def ensure_schema(engine, schema="bkk"):
 def write_df(df, engine, table, schema="bkk", if_exists="append"):
     """Write a dataframe to a table using pandas to_sql"""
     df.to_sql(table, engine, schema = schema, if_exists=if_exists, index=False)
+
+## idempotency helper. helps preventing douplicates on daily runs
+def replace_day(engine, schema, table, service_date):
+    with engine.begin() as conn:
+        conn.execute(text(f"DELETE FROM {schema}.{table} WHERE service_date = :d"),
+                     {"d": service_date})
