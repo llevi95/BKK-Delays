@@ -38,6 +38,9 @@ services:
       - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
       - AIRFLOW_VAR_MSSQL_USER=candidate
       - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+      # ── BKK API key exposed as Airflow Variable bkk_api_key ────────────────
+      # value comes from the gitignored root .env file (BKK_API_KEY=...)
+      - AIRFLOW_VAR_BKK_API_KEY=${BKK_API_KEY}
     volumes:
       - ./dags:/usr/local/airflow/dags
       - ./packages:/usr/local/airflow/packages
@@ -70,6 +73,8 @@ services:
       - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
       - AIRFLOW_VAR_MSSQL_USER=candidate
       - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+      # ── BKK API key exposed as Airflow Variable bkk_api_key ────────────────
+      - AIRFLOW_VAR_BKK_API_KEY=${BKK_API_KEY}
     volumes:
       - ./dags:/usr/local/airflow/dags
       - ./packages:/usr/local/airflow/packages
