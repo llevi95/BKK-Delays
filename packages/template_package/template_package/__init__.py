@@ -37,5 +37,3 @@ if not logger.hasHandlers():
         logger.info("Logging encoder could not be set to utf-8.")
         pass
     logger.addHandler(stream_handler)
-
-
