@@ -12,10 +12,6 @@ et-xmlfile==2.0.0
     # via
     #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
     #   openpyxl
-greenlet==3.1.1
-    # via
-    #   -c https://raw.githubusercontent.com/apache/airflow/constraints-2.10.4/constraints-3.12.txt
-    #   sqlalchemy
 gtfs-realtime-bindings==2.0.0
     # via template-package (pyproject.toml)
 idna==3.10
