@@ -73,11 +73,11 @@ def aggregate_daily_trip(df):
     out = g.agg(
         max_delay="max",
         avg_delay="mean",
-        p95=lambda s: s.quantile(0.95), # value below which 95% of delays fall.
+        p95=lambda s: s.quantile(0.95),  # value below which 95% of delays fall.
         samples="count",
     ).reset_index()
     out["delay_category"] = out["max_delay"].apply(categorize_delay)
-    return out ## TODO debatable, could use p95, or add separate dimension
+    return out  ## TODO debatable, could use p95, or add separate dimension
 
 
 def aggregate_daily_route(trip_df):

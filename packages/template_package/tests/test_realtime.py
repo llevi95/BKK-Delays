@@ -3,6 +3,7 @@ from template_package.gtfs import realtime
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_trip_updates.pb"
 
+
 def test_parse_trip_updates():
     raw = FIXTURE.read_bytes()
     df = realtime.parse_trip_updates(raw, ingest_ts="2026-06-23T08:00:00Z")
