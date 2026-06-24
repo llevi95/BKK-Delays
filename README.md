@@ -48,7 +48,8 @@ Once running, open: **http://localhost:8085**
 ```
 .
 ├── dags/                         # Your DAG files go here
-│   └── example_dag.py
+│   ├── bkk_rt_ingest.py          # poll GTFS-RT, refresh static dims, load raw facts
+│   └── bkk_delay_aggregate.py    # build daily business tables, prune old raw
 ├── packages/
 │   └── template_package/         # Your reusable Python package
 │       ├── pyproject.toml        # Dependency definitions (edit this)
@@ -68,7 +69,8 @@ DAGs are volume-mounted — just create a `.py` file in `dags/` and Airflow will
 To use code from `template_package` in a DAG:
 
 ```python
-from template_package.example_module import my_function
+from template_package import db, quality, transform
+from template_package.gtfs import static, realtime
 ```
 
 `template_package` is installed in **editable mode** inside the containers, so changes to its source files are reflected immediately without a rebuild.
@@ -139,7 +141,7 @@ A Microsoft SQL Server 2022 instance runs as part of the stack. Treat it as you 
 
 | Property | Value                |
 |----------|----------------------|
-| Host (from inside Docker / DAG code) | `mssql_server` |
+| Host (from inside Docker / DAG code) | `mssql` |
 | Host (from your local machine)       | `localhost` |
 | Port     | `1433`               |
 | Database | `candidate_db`       |
@@ -148,33 +150,19 @@ A Microsoft SQL Server 2022 instance runs as part of the stack. Treat it as you 
 
 ### Connecting from a DAG
 
-The connection details are pre-loaded as **Airflow Variables** so you can access them without hardcoding anything:
+The connection is pre-loaded as the Airflow Connection **`mssql_default`** (set via
+`AIRFLOW_CONN_MSSQL_DEFAULT` in `docker-compose.yml`), so nothing is hardcoded:
 
 ```python
-from airflow.models import Variable
-import pymssql
+from airflow.models import Connection
+from template_package import db
 
-conn = pymssql.connect(
-    server=Variable.get("mssql_host"),
-    port=int(Variable.get("mssql_port")),
-    database=Variable.get("mssql_database"),
-    user=Variable.get("mssql_user"),
-    password=Variable.get("mssql_password"),
-)
+conn = Connection.get_connection_from_secrets("mssql_default")
+engine = db.get_engine(conn.get_uri())
 ```
 
-Or with SQLAlchemy:
-
-```python
-from sqlalchemy import create_engine
-from airflow.models import Variable
-
-engine = create_engine(
-    f"mssql+pymssql://{Variable.get('mssql_user')}:{Variable.get('mssql_password')}"
-    f"@{Variable.get('mssql_host')}:{Variable.get('mssql_port')}"
-    f"/{Variable.get('mssql_database')}"
-)
-```
+This is exactly what the DAGs' `_engine()` helper does. The underlying URI is
+`mssql+pymssql://candidate:...@mssql:1433/candidate_db`.
 
 > **Why `pymssql` and not pyodbc?**  
 > `pymssql` ships as a self-contained wheel — no system-level ODBC driver installation needed.
@@ -190,3 +178,153 @@ This means:
 - Every pinned version is guaranteed to be compatible with Airflow
 - The comments in `requirements.txt` show exactly why each version was chosen
 - Running `bash update_requirementy.sh` is always safe — it will error loudly if a conflict exists rather than producing a silently broken image
+
+---
+
+## BKK GTFS delay pipeline
+
+Two Airflow DAGs collect BKK service-delay data and turn it into business-ready tables.
+
+### How to run
+
+1. Set your own BKK API key (kept out of source). Get one from
+   [opendata.bkk.hu](https://opendata.bkk.hu/home) and add it to the gitignored root `.env`:
+   ```
+   BKK_API_KEY=<your-bkk-api-key>
+   ```
+   `docker-compose.yml` exposes it to Airflow as Variable `bkk_api_key`.
+
+2. `docker compose up --build` → open http://localhost:8085 (`admin` / `admin`).
+
+3. Unpause **`bkk_rt_ingest`** and trigger it 2–3 times a few minutes apart
+   (it polls GTFS-Realtime TripUpdates and keeps static dims fresh).
+4. Then trigger **`bkk_delay_aggregate`** to build the daily output tables.
+
+5. Query results, e.g. worst-delayed trips:
+   ```sql
+   SELECT TOP 10 * FROM bkk.daily_trip_delays ORDER BY max_delay DESC;
+   SELECT * FROM bkk.daily_route_delays ORDER BY share_over_5min DESC;
+   SELECT * FROM bkk.daily_hourly_delays ORDER BY avg_delay DESC;
+   ```
+
+### Tests
+
+```bash
+cd packages/template_package && uv sync && uv run pytest
+```
+Unit tests cover the transformation logic, the data-quality checks, and protobuf
+parsing (against a small committed `.pb` fixture — no network needed).
+
+### Technical decisions
+
+- **Two DAGs by cadence:** ingestion runs often (live RT data is fleeting), aggregation
+  runs once daily. Different rhythms (cleaner, can run independently)
+
+- **Delay is computed, not read:** the BKK feed sends absolute *predicted* times
+  (`arrival.time` / `departure.time`), not delays.
+  
+  Ingest stores the predicted epoch times; the aggregate DAG joins them with scheduled times from `stop_times.txt`
+  (`delay = predicted − scheduled`).
+  
+  Scheduled `HH:MM:SS` (can exceed 24h) is converted on the service date in `Europe/Budapest` → UTC. `stop_times.txt` (~5M rows) is too big for the DB, so it's parsed in memory and filtered to observed trips.
+
+- **Delay metric:** arrival delay primary, departure delay fallback.
+
+- **Delay categories:** `on_time` (<120s), `minor_delay` (≤300s), `major_delay` (>300s).
+
+- **`to_sql` auto-create** for tables — minimal DDL at this scale.
+
+- **Resilience:** `requests` timeouts + Airflow `retries`/`execution_timeout` ride out a
+  temporarily unavailable source (the fetch fails, then Airflow retries with backoff).
+  In the aggregate DAG, a missing raw table or a day with no rows raises
+  `AirflowSkipException` (skip, not fail).
+
+- **Idempotency:** static dims rewritten with `if_exists="replace"`; daily outputs use
+  `replace_day` (delete-by-`service_date` then append) so reruns don't duplicate.
+
+- **Naive UTC datetimes** in DB columns: pandas maps tz-aware datetimes to MSSQL
+  `TIMESTAMP` (rowversion), which rejects inserts.
+
+- **Secrets:** API key via Airflow Variable / `.env`, never hardcoded.
+
+### Trade-offs / future improvements
+
+- Explicit `CREATE TABLE` with column types, primary keys, indexes on `service_date`.
+- Retention / partitioning for the growing raw fact table.
+- Bulk insert (vs. `to_sql`) once volume grows.
+- Persisted data-quality report table + alerting hook.
+- Local-tz (`Europe/Budapest`) hour buckets for human-readable rush-hour reporting.
+
+---
+
+## Business questions — example queries
+
+All run against the daily output tables. Replace `'20260624'` (`YYYYMMDD`) with the
+service date you want. Delays are in **seconds** (positive = late).
+
+Output schema:
+- `bkk.daily_trip_delays` — `service_date, trip_id, route_id, max_delay, avg_delay, p95, samples, delay_category`
+- `bkk.daily_route_delays` — `service_date, route_id, avg_delay, max_delay, delayed_trip_count, share_over_5min`
+- `bkk.daily_hourly_delays` — `service_date, hour, avg_delay, n`
+
+**Which trips were delayed the most on a given day?**
+```sql
+SELECT TOP 10 trip_id, route_id, max_delay, avg_delay, samples
+FROM bkk.daily_trip_delays
+WHERE service_date = '20260624'
+ORDER BY max_delay DESC;
+```
+
+**On which routes did significant delays occur most frequently?**
+```sql
+-- delayed_trip_count = trips on the route whose max delay exceeded the on_time threshold (120s)
+SELECT route_id, delayed_trip_count, share_over_5min, avg_delay
+FROM bkk.daily_route_delays
+WHERE service_date = '20260624'
+ORDER BY delayed_trip_count DESC;
+```
+
+**What was the average delay per trip or per route?**
+```sql
+-- per trip
+SELECT trip_id, route_id, avg_delay
+FROM bkk.daily_trip_delays
+WHERE service_date = '20260624'
+ORDER BY avg_delay DESC;
+
+-- per route
+SELECT route_id, avg_delay
+FROM bkk.daily_route_delays
+WHERE service_date = '20260624'
+ORDER BY avg_delay DESC;
+```
+
+**Were there any trips that were regularly delayed by more than 5 minutes?**
+```sql
+-- "regularly" = average delay over the day above 300s, with enough samples to be meaningful
+SELECT trip_id, route_id, avg_delay, max_delay, samples
+FROM bkk.daily_trip_delays
+WHERE service_date = '20260624'
+  AND avg_delay > 300
+  AND samples >= 3
+ORDER BY avg_delay DESC;
+
+-- across multiple days: trips that exceed 5 min on most days observed
+SELECT trip_id, route_id,
+       COUNT(*)                                  AS days_observed,
+       SUM(CASE WHEN avg_delay > 300 THEN 1 ELSE 0 END) AS days_over_5min
+FROM bkk.daily_trip_delays
+GROUP BY trip_id, route_id
+HAVING SUM(CASE WHEN avg_delay > 300 THEN 1 ELSE 0 END) >= COUNT(*) * 0.5
+   AND COUNT(*) >= 3
+ORDER BY days_over_5min DESC;
+```
+
+**During which time periods did the most delays occur?**
+```sql
+-- hour is local Europe/Budapest hour-of-day; n = number of stop-time samples in that hour
+SELECT hour, avg_delay, n
+FROM bkk.daily_hourly_delays
+WHERE service_date = '20260624'
+ORDER BY avg_delay DESC;
+```

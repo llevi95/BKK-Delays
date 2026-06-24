@@ -29,15 +29,10 @@ services:
       # - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/usr/local/airflow/logs
       - AIRFLOW__LOGGING__LOGGING_LEVEL=DEBUG
       - AIRFLOW__WEBSERVER__SECRET_KEY=supersecretkey
-      # ── MSSQL connection details exposed as Airflow Variables ──────────────
-      # Use Variable.get("mssql_host") etc. in your DAGs and package code.
+      # ── MSSQL connection details exposed as Airflow Connection ─────────────
       # From inside Docker the host is "mssql"; candidates connecting from their
       # local machine should use "localhost" with port 1433.
-      - AIRFLOW_VAR_MSSQL_HOST=mssql
-      - AIRFLOW_VAR_MSSQL_PORT=1433
-      - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
-      - AIRFLOW_VAR_MSSQL_USER=candidate
-      - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+      - AIRFLOW_CONN_MSSQL_DEFAULT=mssql+pymssql://candidate:HwC4ndidate%232026@mssql:1433/candidate_db
       # ── BKK API key exposed as Airflow Variable bkk_api_key ────────────────
       # value comes from the gitignored root .env file (BKK_API_KEY=...)
       - AIRFLOW_VAR_BKK_API_KEY=${BKK_API_KEY}
@@ -67,12 +62,8 @@ services:
       - AIRFLOW__CORE__DAGS_FOLDER=/usr/local/airflow/dags
       # - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/usr/local/airflow/logs
       - AIRFLOW__WEBSERVER__SECRET_KEY=supersecretkey
-      # ── MSSQL connection details exposed as Airflow Variables ──────────────
-      - AIRFLOW_VAR_MSSQL_HOST=mssql
-      - AIRFLOW_VAR_MSSQL_PORT=1433
-      - AIRFLOW_VAR_MSSQL_DATABASE=candidate_db
-      - AIRFLOW_VAR_MSSQL_USER=candidate
-      - AIRFLOW_VAR_MSSQL_PASSWORD=HwC4ndidate#2026
+      # ── MSSQL connection details exposed as Airflow Connection ─────────────
+      - AIRFLOW_CONN_MSSQL_DEFAULT=mssql+pymssql://candidate:HwC4ndidate%232026@mssql:1433/candidate_db
       # ── BKK API key exposed as Airflow Variable bkk_api_key ────────────────
       - AIRFLOW_VAR_BKK_API_KEY=${BKK_API_KEY}
     volumes:
